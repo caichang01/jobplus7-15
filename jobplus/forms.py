@@ -4,7 +4,7 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField,PasswordField,SubmitField, BooleanField, ValidationError, TextAreaField, IntegerField
 from wtforms.validators import Required,Length,EqualTo,Email,URL
-from jobplus.models import db,User,Company
+from jobplus.models import db,User,Company,Job
 
 
 #注册表单
@@ -62,7 +62,7 @@ class UserProfileForm(FlaskForm):
 
     def validate_phone(self,field): #电话验证器
         phone = field.data
-        if phone[:2] not in ('13','15','18') and len(phone) !=11 :
+        if phone[:2] not in ('13','15','18') or len(phone) !=11 :
             raise ValidationError('请输入有效的手机号')
     
     #要查看User对象的属性
@@ -78,12 +78,11 @@ class UserProfileForm(FlaskForm):
         db.session.commit()
 
 
-
+#公司信息表
 class CompanyProfileForm(FlaskForm):
-    name = StringField('企业名称')
+    username = StringField('企业名称')
     email = StringField('邮件',validators=[Required(),Email()])
     password = PasswordField('密码（不填写保持不变）')
-    slug = StringField('Slug',validators=[Required(),Length(3,24)])
     location = StringField('地址',validators=[Length(0,64)])
     contact = StringField('公司电话')
     site = StringField('公司网站',validators=[Length(0,64)])
@@ -94,11 +93,11 @@ class CompanyProfileForm(FlaskForm):
 
     def validate_contact(self,field):
         contact = field.data
-        if contact[:2] not in ('13','15','18') and len(contact) !=11:
+        if contact[:2] not in ('13','15','18') or len(contact) !=11:
             raise ValidationError('请输入有效的手机号')
 
     def updated_profile(self,user):
-        user.name = self.name.data
+        user.username = self.username.data
         user.email = self.email.data
         if self.password.data:
             user.password = self.password.data
@@ -156,8 +155,8 @@ class AddCompanyForm(FlaskForm):
     submit = SubmitField('完成')
 
     def validate_name(self, field):
-        if Company.query.filter_by(name=field.data).first():
-            raise ValidationError('公司已经存在')
+        if User.query.filter_by(username=field.data).first():
+            raise ValidationError('公司名称已经存在')
     
     def validate_email(self, field):
         if User.query.filter_by(email=field.data).first():
@@ -170,7 +169,7 @@ class AddCompanyForm(FlaskForm):
             password=self.password.data,
             role=20
         )
-        company = Company(name=self.name.data,
+        company = Company(
                        email=self.email.data,
                        site=self.site.data,
                        description=self.description.data,
@@ -186,10 +185,33 @@ class AddCompanyForm(FlaskForm):
     def update_company(self,company):
         company.user.email = self.email.data
         company.user.password = self.password.data
-        company.name = self.name.data
+        company.user.username = self.name.data
         company.email = self.email.data
         company.site = self.site.data
         company.description = self.description.data
         db.session.add(company)
         db.session.commit()
         return company
+
+class AddJobForm(FlaskForm):
+    name = StringField('职位名称', validators=[Length(3)])
+    low = IntegerField('最低薪酬', validators=[Required()])
+    high = IntegerField('最高薪酬', validators=[Required()])
+    experience = StringField('经验要求', validators=[Length(max=32)])
+    description = StringField('职位描述', validators=[Length(max=128)])
+    degree = StringField('职位学历要求', validators=[Length(max=32)])
+    submit = SubmitField('提交')
+
+    def create_job(self,company):
+        job = Job()
+        self.populate_obj(job)
+        job.company=company
+        db.session.add(job)
+        db.session.commit()
+        return job
+
+    def update_job(self,job):
+        self.populate_obj(job)
+        db.session.add(job)
+        db.session.commit()
+        return job
